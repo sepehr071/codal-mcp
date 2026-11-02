@@ -205,7 +205,7 @@ It only reads.
 
 ## Good to know
 
-- **Rate limit.** codal.ir answers HTTP 429 and shows a captcha after a burst of requests, then blocks the IP for up to an hour. The server sends one request at a time, at least 2 seconds apart, keeps the company list and letter types for 12 hours, letters for an hour and searches for 2 minutes, and never retries a 429. After a 429 it stops calling codal.ir for 10 minutes and tells the agent to wait. It never solves captchas.
+- **Rate limit.** codal.ir answers HTTP 429 and shows a captcha after a burst of requests, then blocks the IP for up to an hour. The server sends one request at a time, at least 2 seconds apart, keeps the company list and letter types for 12 hours, letters for an hour and searches for 2 minutes, and never retries a 429. After a 429 it stops calling codal.ir for 60 seconds and tells the agent to wait. It never solves captchas.
 - **Iranian connection.** codal.ir often does not answer connections from outside Iran (from a foreign VPN exit, requests timed out in our tests). Set `CODAL_MCP_PROXY` to an HTTP proxy with an Iranian exit. System proxy variables are ignored on purpose.
 - **Units.** Statement and report amounts are as published, usually million Rial; `unit_note` quotes the page. EPS is in Rial. Divide Rial by 10 for Toman.
 - **Tables are text.** Each table row is one line with cells separated by ` | `. Numbers have no thousands separators, and negatives are `-N` where the site shows `(N)`. Income statements have two «درصد تغيير» columns: change against the same period last year and against the last full year.
