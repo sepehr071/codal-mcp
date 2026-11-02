@@ -44,7 +44,7 @@ PAGE_HEADERS = {
 
 MIN_INTERVAL = 2.0  # seconds between two requests to codal.ir; all requests are serialized
 JITTER = (0.1, 0.5)  # extra seconds added to each gap
-BLOCK_COOLDOWN = 600  # seconds to stop calling codal.ir after a 429 or captcha (its block lasts up to an hour)
+BLOCK_COOLDOWN = 60  # seconds to stop calling codal.ir after a 429 or captcha (shared servers recover fast)
 MAX_RETRIES = 1  # timeouts, network errors and 5xx only; 429 and 403 are never retried
 RETRY_DELAY = 2.0  # seconds before the retry
 CACHE_TTL = 120  # seconds; default for searches
@@ -148,10 +148,10 @@ def _get_client() -> httpx.AsyncClient:
     return _client
 
 
-def _blocked_message(minutes: int) -> str:
+def _blocked_message(seconds: int) -> str:
     return (
-        f"codal.ir is rate limiting this connection (HTTP 429 / captcha). Do not retry now: wait about {minutes} "
-        "minutes and then try again with fewer calls. Earlier results are still valid."
+        f"codal.ir is rate limiting this connection (HTTP 429 / captcha). Do not retry now: wait about {seconds} "
+        "seconds and then try again with fewer calls. Earlier results are still valid."
     )
 
 
@@ -194,7 +194,7 @@ async def fetch(url: str, params: dict[str, Any] | None = None, text: bool = Fal
         if blocked:
             if not rotated:
                 _blocked_until = time.monotonic() + BLOCK_COOLDOWN
-            raise ApiError(_blocked_message(BLOCK_COOLDOWN // 60), 429)
+            raise ApiError(_blocked_message(BLOCK_COOLDOWN), 429)
     if r.status_code >= 400:
         raise ApiError(_status_message(r, host), r.status_code)
     if text:
@@ -213,7 +213,7 @@ async def fetch(url: str, params: dict[str, Any] | None = None, text: bool = Fal
 async def _request(url, query, headers, host) -> tuple[httpx.Response, bytes, httpx.AsyncClient]:
     global _lock, _last
     if (left := _blocked_until - time.monotonic()) > 0:
-        raise ApiError(_blocked_message(max(1, round(left / 60))), 429)
+        raise ApiError(_blocked_message(max(1, round(left))), 429)
     if _lock is None:
         _lock = asyncio.Lock()
     async with _lock:  # one request at a time, at least MIN_INTERVAL apart

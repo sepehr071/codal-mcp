@@ -193,7 +193,7 @@ async def test_financial_years(client, api):
 async def test_rate_limit_gives_clear_error_and_pauses_calls(client, api):
     api[Q] = lambda r: httpx.Response(429, text="The custom error module does not recognize this error.")
     r = await client.call_tool("cd_search_letters", {"symbol": "فولاد"})
-    assert r.is_error and "rate limiting" in r.content[0].text and "wait about 10 minutes" in r.content[0].text
+    assert r.is_error and "rate limiting" in r.content[0].text and "wait about 60 seconds" in r.content[0].text
     r = await client.call_tool("cd_search_letters", {"symbol": "خودرو"})
     assert r.is_error and "rate limiting" in r.content[0].text
     assert len(api.calls) == 1  # no retry, and no new request during the pause
