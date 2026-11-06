@@ -1,6 +1,6 @@
 [project]
 name = "codal-mcp"
-version = "0.1.1"
+version = "0.2.0"
 description = "Unofficial read-only MCP server for codal.ir (کدال): disclosures, letters and financial statements of Iranian listed companies."
 readme = "README.md"
 license = "MIT"
