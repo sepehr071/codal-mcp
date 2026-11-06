@@ -131,12 +131,12 @@ def _row(x: dict[str, Any]) -> dict[str, Any]:
 async def cd_search_letters(
     symbol: Annotated[
         str | None,
-        Field(description="Exact trading symbol in Persian, e.g. فولاد or خودرو. Use cd_company to find it."),
+        Field(description="Exact Persian trading symbol, e.g. فولاد (find with cd_company)."),
     ] = None,
     category: Annotated[
         int | None,
         Field(
-            description="Letter group: 1 financial statements, board reports and dividend schedules; 2 material information, clarifications and EPS forecasts; 3 monthly activity and portfolio reports; 4 articles of association and prospectuses; 5 board and audit committee; 6 shareholder meetings (invitations, decisions); 7 capital increase; 8 exchange notices; 9 SEO (regulator) notices; 10 other; 11 debt securities.",
+            description="Letter group: 1 financial statements, dividend schedules; 2 material info, clarifications; 3 monthly activity, portfolios; 4 articles, prospectuses; 5 board, audit committee; 6 shareholder meetings; 7 capital increase; 8 exchange notices; 9 SEO notices; 10 other; 11 debt securities.",
             ge=1,
             le=11,
         ),
@@ -144,39 +144,31 @@ async def cd_search_letters(
     letter_type: Annotated[
         int | None,
         Field(
-            description="One letter type id from cd_letter_types, e.g. 6 interim/annual financial statements, 58 monthly activity report, 20 annual general meeting decisions, 11 material information, 30 dividend payment schedule.",
+            description="Letter type id from cd_letter_types, e.g. 6 financial statements, 58 monthly activity, 20 AGM decisions, 30 dividend schedule.",
             ge=1,
         ),
     ] = None,
     title: Annotated[
         str | None,
-        Field(description="Words that must appear in the letter title, in Persian, e.g. سود or افزایش سرمایه."),
+        Field(description="Persian words in the letter title, e.g. افزایش سرمایه."),
     ] = None,
-    from_date: Annotated[
-        str | None, Field(description="Sent on or after this Jalali date, YYYY/MM/DD, e.g. 1405/07/01.")
-    ] = None,
-    to_date: Annotated[str | None, Field(description="Sent on or before this Jalali date, YYYY/MM/DD.")] = None,
+    from_date: Annotated[str | None, Field(description="Sent on/after this Jalali date, e.g. 1405/07/01.")] = None,
+    to_date: Annotated[str | None, Field(description="Sent on/before this Jalali date.")] = None,
     period_months: Annotated[
         int | None,
         Field(
-            description="Only reports covering this many months, e.g. 12 annual, 6 half-year, 3 quarterly, 1 monthly.",
+            description="Report period in months: 12 annual, 6 half-year, 3 quarterly, 1 monthly.",
             ge=1,
             le=12,
         ),
     ] = None,
-    tracing_no: Annotated[
-        int | None, Field(description="Codal tracing number (شماره پیگیری) of one letter, e.g. 1612323.", ge=1)
-    ] = None,
-    page: Annotated[int, Field(description="Result page, 20 letters each, newest first.", ge=1)] = 1,
+    tracing_no: Annotated[int | None, Field(description="Tracing number (شماره پیگیری) of one letter.", ge=1)] = None,
+    page: Annotated[int, Field(description="Result page (20 letters).", ge=1)] = 1,
 ) -> dict[str, Any]:
     """Search codal.ir disclosures (letters) of Iranian listed companies, newest first, 20 per page.
 
-    Use it for "latest letters of a company", financial statements, monthly reports, meeting decisions, dividend
-    schedules or capital increases. With no filters it lists the newest letters of all companies. Combine filters
-    to narrow down; `total` is the number of matching letters and `pages` the number of pages (pass `page` for more).
-    Each letter has its `tracing_no`: pass it to cd_letter to read the letter's text and tables and get its PDF,
-    Excel and attachment links. `files` lists what the letter has. Dates and times are Jalali (Tehran time).
-    No results: check the symbol with cd_company, widen the dates or drop a filter.
+    No filters lists the newest letters of all companies. `total` = matches, `pages` = page count. Pass a
+    letter's `tracing_no` to cd_letter to read it. No results: check the symbol with cd_company or widen filters.
     """
     body = await _search(
         {
@@ -358,24 +350,17 @@ def _link(path: str) -> str:
 
 @tool("Read one Codal letter")
 async def cd_letter(
-    tracing_no: Annotated[
-        int, Field(description="Tracing number (شماره پیگیری) from cd_search_letters, e.g. 1612323.", ge=1)
-    ],
+    tracing_no: Annotated[int, Field(description="Tracing number (شماره پیگیری) from cd_search_letters.", ge=1)],
     sheet: Annotated[
         int | None,
-        Field(
-            description="For financial statements with several sheets: the `sheet` id from the `sheets` list of a previous call, e.g. 0 for the balance sheet. Omit for the first sheet."
-        ),
+        Field(description="Sheet id from the `sheets` list of a previous call; omit for the first sheet."),
     ] = None,
 ) -> dict[str, Any]:
     """Read one codal.ir letter: its text or tables, plus links to its page, PDF, Excel and attachments.
 
-    Use it after cd_search_letters to see what a letter says. Structured reports (financial statements, monthly
-    activity reports) come back as `tables`, one line per row with cells separated by ' | ' (amounts as on the
-    site, usually million Rial; see `unit_note`). Financial statements show one sheet at a time: `sheets` lists
-    them (income statement, balance sheet, cash flows ...); call again with `sheet` to read another. Other letters
-    come back as `text`. `attachments` are files the company attached (often the real content of an explanation
-    letter). Long letters are cut at 16,000 characters (`truncated`); the PDF link has the full letter.
+    Structured reports come back as `tables` (one line per row, cells joined by ' | ', usually million Rial; see
+    `unit_note`), one sheet at a time: `sheets` lists them, call again with `sheet` for another. Other letters
+    give `text`. `attachments` are the company's files. Cut at 16,000 characters (`truncated`); the PDF has all.
     """
     body = await _search({"TracingNo": tracing_no}, ttl=LETTER_TTL)
     found = [x for x in body["Letters"] if isinstance(x, dict) and x.get("TracingNo") == tracing_no]
@@ -439,16 +424,14 @@ async def _companies() -> list[dict[str, Any]]:
 async def cd_company(
     query: Annotated[
         str,
-        Field(description="Trading symbol or part of the company name, in Persian, e.g. فولاد or فولاد مبارکه."),
+        Field(description="Persian symbol or part of the name, e.g. فولاد."),
     ],
-    limit: Annotated[int, Field(description="Most companies to return.", ge=1, le=50)] = 10,
+    limit: Annotated[int, Field(description="Max companies.", ge=1, le=50)] = 10,
 ) -> dict[str, Any]:
     """Find companies and funds on codal.ir by symbol or name, with their market, industry and type.
 
-    Use it to get the exact `symbol` for cd_search_letters and cd_financial_years, or to answer what a symbol is.
-    Exact symbol or name matches come first, then symbols starting with the query, then names containing it;
-    within each, exchange-listed companies before unlisted ones. Covers the
-    ~5,400 publishers on codal.ir, including unlisted companies and funds. `matched` is the total number of hits.
+    Use it to get the exact `symbol` for cd_search_letters and cd_financial_years. Exact matches first, then
+    prefix, then name contains; listed before unlisted. `matched` is the total number of hits.
     """
     q = _key(query)
     if not q:
@@ -482,13 +465,12 @@ async def cd_company(
 async def cd_letter_types(
     category: Annotated[
         int | None,
-        Field(description="Letter group code (1-11) to list its letter types; omit to list the groups.", ge=1, le=11),
+        Field(description="Group code to list its letter types; omit to list the groups.", ge=1, le=11),
     ] = None,
 ) -> dict[str, Any]:
     """List codal.ir letter groups, or the letter types of one group with the ids cd_search_letters takes.
 
-    Call it without arguments for the 11 groups, then with `category` for that group's letter types. Use the
-    `id` of a type as `letter_type` in cd_search_letters (with or without the same `category`).
+    No argument: the 11 groups. With `category`: its types; use a type `id` as `letter_type` in cd_search_letters.
     """
     body = await fetch(f"{SEARCH}/v1/categories", ttl=LOOKUP_TTL)
     if not isinstance(body, list):
@@ -521,13 +503,12 @@ async def cd_letter_types(
 
 @tool("Fiscal years of a company")
 async def cd_financial_years(
-    symbol: Annotated[str, Field(description="Exact trading symbol in Persian, e.g. فولاد.")],
+    symbol: Annotated[str, Field(description="Exact Persian trading symbol, e.g. فولاد.")],
 ) -> dict[str, Any]:
     """List the fiscal year-end dates codal.ir knows for one company, newest first (Jalali).
 
-    Use it to learn when a company's fiscal year ends (e.g. 12/29 or 03/31) before searching for its annual
-    statements with cd_search_letters (from_date after the year end, period_months 12). An empty list usually
-    means the symbol is wrong: check it with cd_company.
+    Use it before searching annual statements with cd_search_letters (period_months 12). An empty list usually
+    means a wrong symbol: check cd_company.
     """
     sy = _symbol(symbol)
     if not sy:
