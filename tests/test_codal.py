@@ -4,7 +4,7 @@ import httpx
 import pytest
 from conftest import FIXTURES, fixture, page
 
-from codal_mcp import http
+from codal_mcp import http, server
 
 pytestmark = pytest.mark.anyio
 
@@ -233,3 +233,28 @@ async def test_server_error_is_retried_once(client, api):
     api[Q] = flaky
     r = await client.call_tool("cd_search_letters", {})
     assert not r.is_error and len(calls) == 2
+
+
+async def test_connect_timeout_is_not_retried_but_read_timeout_is(client, api):
+    def hang(request):
+        raise httpx.TimeoutException("Failed to perform, curl: (28) Connection timed out after 4010 milliseconds.")
+
+    api[Q] = hang
+    r = await client.call_tool("cd_search_letters", {})
+    assert r.is_error and "did not answer in time" in r.content[0].text and len(api.calls) == 1
+
+    def slow(request):
+        raise httpx.TimeoutException("Failed to perform, curl: (28) Operation timed out after 14000 milliseconds.")
+
+    api[Q] = slow
+    await client.call_tool("cd_search_letters", {"page": 2})
+    assert len(api.calls) == 3
+
+
+async def test_call_past_deadline_fails_with_clear_error(client, api, monkeypatch):
+    monkeypatch.setattr(server, "DEADLINE", 0.2)
+    monkeypatch.setattr(http, "MIN_INTERVAL", 1)  # the second request waits in the queue past the deadline
+    api[Q] = by_tracing
+    serve_letters(api)
+    r = await client.call_tool("cd_letter", {"tracing_no": 1618277})
+    assert r.is_error and "did not answer within 0.2 s" in r.content[0].text

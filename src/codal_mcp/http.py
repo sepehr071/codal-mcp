@@ -45,7 +45,7 @@ PAGE_HEADERS = {
 MIN_INTERVAL = 2.0  # seconds between two requests to codal.ir; all requests are serialized
 JITTER = (0.1, 0.5)  # extra seconds added to each gap
 BLOCK_COOLDOWN = 60  # seconds to stop calling codal.ir after a 429 or captcha (shared servers recover fast)
-MAX_RETRIES = 1  # timeouts, network errors and 5xx only; 429 and 403 are never retried
+MAX_RETRIES = 1  # read timeouts, network errors and 5xx only; connect timeouts, 429 and 403 are never retried
 RETRY_DELAY = 2.0  # seconds before the retry
 CACHE_TTL = 120  # seconds; default for searches
 CACHE_MAX = 64
@@ -118,7 +118,7 @@ def _next_proxy(client: httpx.AsyncClient) -> bool:
 
 
 async def _close_later(client: httpx.AsyncClient) -> None:
-    await asyncio.sleep(40)  # longer than the 30 s request timeout
+    await asyncio.sleep(40)  # longer than any request (the tool DEADLINE is 15 s)
     await client.aclose()
 
 
@@ -140,7 +140,7 @@ def _get_client() -> httpx.AsyncClient:
                 max_connections=4,
             ),
             headers=HEADERS,
-            timeout=httpx.Timeout(30, connect=8),
+            timeout=httpx.Timeout(10, connect=4),  # answers take 0.3-4 s; keeps a retry within the tool DEADLINE
             limits=httpx.Limits(max_connections=4),
             follow_redirects=False,
             trust_env=False,
@@ -179,7 +179,9 @@ async def fetch(url: str, params: dict[str, Any] | None = None, text: bool = Fal
         try:
             r, content, client = await _request(url, query, headers, host)
         except ApiError as e:
-            if last or e.status is not None:
+            # A connect timeout is codal.ir ignoring this IP (it hangs for non-Iranian ones): a retry only waits again.
+            # curl_cffi raises a plain TimeoutException for both kinds, so its message tells them apart.
+            if last or e.status is not None or "Connection timed out" in str(e.__cause__):
                 raise
             await asyncio.sleep(RETRY_DELAY)
             continue

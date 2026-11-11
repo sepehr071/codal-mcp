@@ -1,5 +1,6 @@
 """MCP server entry point: registers every read-only codal.ir tool."""
 
+import asyncio
 import functools
 import inspect
 import json
@@ -9,7 +10,12 @@ from mcp.server import MCPServer
 from mcp.types import ToolAnnotations
 
 from . import __version__, codal  # noqa: F401  (imports register the tools)
+from .http import ApiError
 from .registry import TOOLS
+
+# Seconds one tool call may take, waiting for the request queue and retries included: hosts like the mcpfarsi router
+# cut a call at 20 s, and a clear error before that lets them retry elsewhere.
+DEADLINE = 15
 
 INSTRUCTIONS = """\
 Unofficial, read-only access to codal.ir (سامانه کدال), the disclosure system of Iranian listed companies:
@@ -48,11 +54,21 @@ def _slim(v, top=False):
 
 
 def compact(fn):
-    """Return the tool result as one compact JSON text block (the SDK default sends it twice, indented)."""
+    """Return the tool result as one compact JSON text block (the SDK default sends it twice, indented).
+
+    The call fails with ApiError once it runs past DEADLINE.
+    """
 
     @functools.wraps(fn)
     async def run(*args, **kwargs):
-        return json.dumps(_slim(await fn(*args, **kwargs), top=True), ensure_ascii=False, separators=(",", ":"))
+        try:
+            result = await asyncio.wait_for(fn(*args, **kwargs), DEADLINE)
+        except asyncio.TimeoutError:
+            raise ApiError(
+                f"codal.ir did not answer within {DEADLINE} s. It often answers only Iranian connections "
+                "(CODAL_MCP_PROXY sets an Iranian proxy). Try again in a moment."
+            ) from None
+        return json.dumps(_slim(result, top=True), ensure_ascii=False, separators=(",", ":"))
 
     run.__doc__ = inspect.cleandoc(fn.__doc__ or "")
     return run
