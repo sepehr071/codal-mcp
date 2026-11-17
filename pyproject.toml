@@ -1,9 +1,9 @@
 [project]
 name = "codal-mcp"
-version = "0.2.1"
+version = "0.2.2"
 description = "Unofficial read-only MCP server for codal.ir (کدال): disclosures, letters and financial statements of Iranian listed companies."
 readme = "README.md"
-license = "MIT"
+license = "PolyForm-Noncommercial-1.0.0"
 license-files = ["LICENSE"]
 authors = [{ name = "Sepehr Radmard", email = "sepehrr80@gmail.com" }]
 requires-python = ">=3.10"
