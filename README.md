@@ -183,26 +183,6 @@ Pass the trading symbol in Persian (`فولاد`, `خودرو`). Dates are Jalal
 
 All 5 tools are annotated `readOnlyHint: true`.
 
-## How it works
-
-```text
-  AI agent  (Claude, Cursor, Copilot, ...)
-      │
-      │  MCP over stdio
-      ▼
-  codal-mcp  (runs on your machine)
-      │
-      │  HTTPS, one request at a time, at least 2 s apart
-      ├──────▶  search.codal.ir   search API, company list, letter types, fiscal years
-      └──────▶  www.codal.ir      letter pages, sheets, attachment lists
-```
-
-`codal-mcp` runs locally and calls the same search API and letter pages the codal.ir website uses. It has no hosted
-server in between and no API key. Structured reports carry their tables as data inside the letter page; the server
-reads that data and returns each row as one line, in the site's column order. Other letters come back as their
-visible text. Requests go out through a Chrome-impersonating client, only to `search.codal.ir` and `www.codal.ir`.
-It only reads.
-
 ## Good to know
 
 - **Rate limit.** codal.ir answers HTTP 429 and shows a captcha after a burst of requests, then blocks the IP for up to an hour. The server sends one request at a time, at least 2 seconds apart, keeps the company list and letter types for 12 hours, letters for an hour and searches for 2 minutes, and never retries a 429. After a 429 it stops calling codal.ir for 60 seconds and tells the agent to wait. It never solves captchas.
